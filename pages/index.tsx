@@ -9,51 +9,63 @@ interface Holding {
 const Holdings: React.FC = () => {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const fetchRealTimePrice = async (ticker: string) => {
-      setError('');
-      const response = await fetch(`/api/hello?ticker=${ticker}`).catch(e => {
+    setError('');
+    try {
+      const response = await fetch(`/api/hello?ticker=${ticker}`);
+      if (!response.ok) throw new Error(`Network response was not ok`);
+      try {
+        const data = await response.json();
+        if (data && data.price) {
+          return data.price;
+        } else {
+          setError(`Invalid data received for ${ticker}`);
+          return undefined;
+        }
+      } catch (e) {
         setError(`Failed to fetch price for ${ticker}`);
         console.error(e);
-        return;
-      });
-  
-      const data = await response.json();
-      if (data && data.price) {
-        return data.price;
-      } else {
-        setError(`Invalid data received for ${ticker}`);
-        return undefined;
+        return undefined
       }
-    };
+    } catch (e) {
+      setError(`Failed to fetch price for ${ticker}`);
+      console.error(e);
+      return undefined
+    }
+  };
   
   const [newHolding, setNewHolding] = useState<Holding>({ ticker: '', shares: 0, buyPrice: 0 });
   const [editingHolding, setEditingHolding] = useState<Holding | null>(null);
 
-  const addHolding = () => {
-    if (newHolding.ticker && newHolding.shares > 0 && newHolding.buyPrice > 0) {
-      fetchRealTimePrice(newHolding.ticker).then(price => {
+  const addHolding = async () => {
+    try {
+      if (newHolding.ticker && newHolding.shares > 0 && newHolding.buyPrice > 0) {
+        const price = await fetchRealTimePrice(newHolding.ticker)
         if(price !== undefined) {
-          setHoldings([...holdings, { ...newHolding, realTimePrice: price }]);
-        } else {
-          setError(`Could not add holding for ${newHolding.ticker}`)
-        }
-      }).catch(e => {
-        setError(`Could not add holding for ${newHolding.ticker}`)
+            setHoldings([...holdings, { ...newHolding, realTimePrice: price }]);
+          } else {
+              setError(`Could not add holding for ${newHolding.ticker}`);
+          }
+        setNewHolding({ ticker: '', shares: 0, buyPrice: 0 });
+      }
+    } catch (e) {
+        setError(`Could not add holding for ${newHolding.ticker}`);
         console.error(e);
-      });
-      setNewHolding({ ticker: '', shares: 0, buyPrice: 0 });
     }
   };
 
-  const updateHolding = (updatedHolding: Holding) => {
-    fetchRealTimePrice(updatedHolding.ticker).then(price => {
-      setHoldings(holdings.map(holding =>
-        holding.ticker === updatedHolding.ticker ? { ...updatedHolding, realTimePrice: price } : holding,
-      ));
-      setEditingHolding(null);
-    }).catch(e => {
+  const updateHolding = async (updatedHolding: Holding) => {
+    try {
+      const price = await fetchRealTimePrice(updatedHolding.ticker)
+      if(price !== undefined){
+          setHoldings(holdings.map(holding =>
+              holding.ticker === updatedHolding.ticker ? { ...updatedHolding, realTimePrice: price } : holding,
+          ));
+          setEditingHolding(null);
+      }
+    } catch (e) {
       setError(`Could not update holding for ${updatedHolding.ticker}`)
       console.error(e);
-    });
+    }
   };
     const [error, setError] = useState<string>('');
 
@@ -101,32 +113,31 @@ const Holdings: React.FC = () => {
                 <td  >{holding.shares}</td>
                 <td  >{holding.buyPrice}</td>
                 <td  >{holding.realTimePrice === undefined ? 'N/A' : holding.realTimePrice.toFixed(2)}</td>
-                <td>
-                  {
-                    ( () => {
-                      if(holding.realTimePrice === undefined) return 'N/A'
-                      const percentage = ((holding.realTimePrice - holding.buyPrice) / holding.buyPrice) * 100;
-                      const color = percentage >= 0 ? 'green' : 'red';
-                      return <span style={{ color }}>{percentage.toFixed(2)}%</span>;
-                    })()
-                  }
+                <td>{
+                    holding.realTimePrice === undefined ? 'N/A' : (
+                        (() => {
+                            const percentage = ((holding.realTimePrice - holding.buyPrice) / holding.buyPrice) * 100;
+                            const color = percentage >= 0 ? 'green' : 'red';
+                            return <span style={{ color }}>{percentage.toFixed(2)}%</span>;
+                        })()
+                    )
+                }
                 </td>
                 <td  >
                   {
-                    ( (currentPrice = holding.realTimePrice || 0) => {
+                    (() => {
+                      const currentPrice = holding.realTimePrice || 0;
                       const profitLoss = (currentPrice - holding.buyPrice) * holding.shares;
-                      return (
-                        <span style={{ color: profitLoss >= 0 ? 'green' : 'red' }}>{profitLoss.toFixed(2)}</span>
-                      );
-                    })()
-                  }
+                      return <span style={{ color: profitLoss >= 0 ? 'green' : 'red' }}>{profitLoss.toFixed(2)}</span>
+                  })() 
+                }
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </div>
+    </div >
   );
 };
 
